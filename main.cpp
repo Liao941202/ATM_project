@@ -349,45 +349,61 @@ int main() {
                     continue;
                 }
 
-                // 最多三次嘗試
-                int attempts = 0;
-                bool loginSuccess = false;
-                while (attempts < 3 && !loginSuccess) {
-                    attempts++;
-                    cout << "請輸入密碼（僅限數字，剩餘嘗試次數：" << (3 - attempts + 1) << "）：";
+                // 密碼嘗試次數（3次機會）
+                int passwordAttempts = 3;
+                bool passwordCorrect = false;
+                while (passwordAttempts > 0 && !passwordCorrect) {
+                    cout << "請輸入密碼（僅限數字，剩餘嘗試次數：" << passwordAttempts << "）：";
                     password = getHiddenPassword();
-                    while (!isNumericPassword(password)) {
-                        cout << "密碼只能包含數字，請重新輸入（剩餘嘗試次數：" << (3 - attempts + 1) << "）：";
-                        password = getHiddenPassword();
-                    }
+                    passwordAttempts--; // 無論輸入是否為數字，均扣一次機會
+                    logAction(username, "password_attempt", maskPassword(password));
 
-                    if (!tempAccount->checkPassword(password)) {
-                        cout << "密碼錯誤。" << endl;
-                        if (attempts == 3) {
-                            cout << "帳戶已被凍結： " << username << endl;
+                    if (!isNumericPassword(password)) {
+                        cout << "密碼只能包含數字，輸入無效。" << endl;
+                        if (passwordAttempts == 0) {
+                            cout << "密碼嘗試次數用盡，帳戶已被凍結： " << username << endl;
                             frozenAccounts.insert(username);
-                            break;
+                            logAction(username, "freeze", "password_limit");
                         }
                         continue;
                     }
 
-                    // 模擬發送驗證碼
-                    string verificationCode = generateVerificationCode();
-                    cout << "已發送驗證碼至您的設備：" << verificationCode << endl; // 模擬顯示驗證碼
-                    cout << "請輸入驗證碼：";
-                    getline(cin, inputCode);
-
-                    if (inputCode == verificationCode) {
-                        current = tempAccount;
-                        cout << "驗證成功！登入成功！歡迎，" << current->getUsername() << "！" << endl;
-                        logAction(username, "login", "");
-                        loginSuccess = true;
-                    } else {
-                        cout << "驗證碼錯誤。" << endl;
-                        if (attempts == 3) {
-                            cout << "帳戶已被凍結： " << username << endl;
+                    if (!tempAccount->checkPassword(password)) {
+                        cout << "密碼錯誤。" << endl;
+                        if (passwordAttempts == 0) {
+                            cout << "密碼嘗試次數用盡，帳戶已被凍結： " << username << endl;
                             frozenAccounts.insert(username);
-                            break;
+                            logAction(username, "freeze", "password_limit");
+                        }
+                        continue;
+                    }
+                    passwordCorrect = true; // 密碼正確，退出密碼循環
+                }
+
+                if (passwordCorrect) {
+                    // 驗證碼嘗試次數（3次機會）
+                    int verificationAttempts = 3;
+                    bool verificationSuccess = false;
+                    while (verificationAttempts > 0 && !verificationSuccess) {
+                        string verificationCode = generateVerificationCode();
+                        cout << "已發送驗證碼至您的設備：" << verificationCode << endl;
+                        cout << "請輸入驗證碼（剩餘嘗試次數：" << verificationAttempts << "）：";
+                        getline(cin, inputCode);
+                        verificationAttempts--; // 無論正確與否，扣一次機會
+                        logAction(username, "verification_attempt", maskPassword(inputCode));
+
+                        if (inputCode == verificationCode) {
+                            current = tempAccount;
+                            cout << "驗證成功！登入成功！歡迎，" << current->getUsername() << "！" << endl;
+                            logAction(username, "login", "");
+                            verificationSuccess = true;
+                        } else {
+                            cout << "驗證碼錯誤。" << endl;
+                            if (verificationAttempts == 0) {
+                                cout << "驗證碼嘗試次數用盡，帳戶已被凍結： " << username << endl;
+                                frozenAccounts.insert(username);
+                                logAction(username, "freeze", "verification_limit");
+                            }
                         }
                     }
                 }
@@ -429,11 +445,10 @@ int main() {
                 cout << "請輸入目標用戶名稱：";
                 clearInputBuffer();
                 getline(cin, targetUsername);
-                // 檢查目標帳戶是否凍結
-            if (frozenAccounts.find(targetUsername) != frozenAccounts.end()) {
-                cout << "目標帳戶已被凍結，無法轉帳。" << endl;
-                continue;
-            }
+                if (frozenAccounts.find(targetUsername) != frozenAccounts.end()) {
+                    cout << "目標帳戶已被凍結，無法轉帳。" << endl;
+                    continue;
+                }
                 cout << "請輸入轉帳金額：";
                 if (!(cin >> amount)) {
                     cout << "無效輸入，請輸入數字。" << endl;
